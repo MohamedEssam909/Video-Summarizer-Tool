@@ -1,0 +1,6 @@
+opencv-python
+PyQt5
+numpy
+moviepy
+pydub
+SpeechRecognition
