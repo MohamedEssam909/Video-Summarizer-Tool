@@ -90,8 +90,6 @@ def score_scene(scene_video_path):
     face_score = compute_face_score(scene_video_path)
     motion_score = compute_motion_score(scene_video_path)
     audio_score = compute_audio_score(scene_video_path)
-
-    # Combine scores (you can apply different weights here if needed)
     total_score = face_score * 0.3 + motion_score * 0.4 + audio_score * 0.3
     return total_score
 
@@ -229,23 +227,6 @@ def compute_object_score(video_path):
     cap.release()
     return object_count_sum / frame_count if frame_count > 0 else 0
 
-def compute_object_score(video_path):
-    cap = cv2.VideoCapture(video_path)
-    frame_count = 0
-    object_count_sum = 0
-
-    while True:
-        ret, frame = cap.read()
-        if not ret:
-            break
-
-        # Detect objects in the frame using cvlib
-        detected_objects, confidence = object_detect(frame)
-        object_count_sum += len(detected_objects)
-        frame_count += 1
-
-    cap.release()
-    return object_count_sum / frame_count if frame_count > 0 else 0
 
 def compute_audio_score(video_path):
     # Extract audio from video and load it with pydub
