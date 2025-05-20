@@ -3,17 +3,15 @@ import os
 import numpy as np
 from moviepy import VideoFileClip ,concatenate_videoclips
 from pydub import AudioSegment
-import speech_recognition as sr
-from pydub import AudioSegment
 import moviepy.config as mpy_config
 import sys
+import statistics
 
 
 config_path = "deploy.prototxt.txt"
 model_path = "mobilenet_iter_73000.caffemodel"
 
 
-import moviepy.config as mpy_config
 
 
 if getattr(sys, 'frozen', False):
@@ -39,7 +37,7 @@ def extract_frames(video_path, output_folder, fps=1):
 
     while True:
         ret, frame = cap.read()
-        if not ret:
+        if not ret:  #boolean flag to indicate frame is captured or not 
             break
 
         if frame_count % frame_interval == 0:
@@ -54,10 +52,18 @@ def extract_frames(video_path, output_folder, fps=1):
 
 
 
+'''
+ Computes a color histogram for a given video frame. 
+ This histogram is a numerical representation of the color distribution, 
+ useful for comparing visual similarity between frames.
+'''
+
 def calculate_histogram(frame):
     hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
     hist = cv2.calcHist([hsv], [0, 1], None, [50, 60], [0, 180, 0, 256])
     return cv2.normalize(hist, hist).flatten()
+
+
 
 
 
@@ -86,16 +92,29 @@ def detect_scene_changes(frames_folder, threshold=0.7):
     return scene_changes
 
 
+
+
+
 def score_scene(scene_video_path):
     face_score = compute_face_score(scene_video_path)
     motion_score = compute_motion_score(scene_video_path)
     audio_score = compute_audio_score(scene_video_path)
-    total_score = face_score * 0.3 + motion_score * 0.4 + audio_score * 0.3
+    object_score = compute_object_score(scene_video_path)
+    total_score = (
+        face_score * 0.25 +
+        motion_score * 0.25 +
+        audio_score * 0.25 +
+        object_score * 0.25
+    )
     return total_score
+
+
 
 
 def frame_to_seconds(frame_index, fps):
     return frame_index / fps
+
+
 
 
 def split_video_by_scenes(video_path, frames_folder, scene_frames, output_folder, sampled_fps=1):
@@ -134,13 +153,17 @@ def split_video_by_scenes(video_path, frames_folder, scene_frames, output_folder
 
     # Ensure the last scene gets added
     final_scene_times.append((last_start, scene_times[-1]))
+    scene_durations = [end - start for (start, end) in final_scene_times if end > start]
+    avg_duration = sum(scene_durations) / len(scene_durations)
+    print("here->",avg_duration)
+    std_dev = statistics.stdev(scene_durations)
 
     for i, (start, end) in enumerate(final_scene_times):
         
         if start >= end or end > duration:
             continue
 
-        if end-start<2:
+        if end-start<max(0.5, avg_duration - std_dev) or end-start>(avg_duration+std_dev):
             continue
 
         scene_clip = video.subclipped(start, end)
@@ -167,16 +190,13 @@ def split_video_by_scenes(video_path, frames_folder, scene_frames, output_folder
                 print(f" Removed {temp_audio}")
             except Exception as e:
                 print(f" Could not remove temp audio file: {e}")      
-    
+
+
 
 
 # Initialize face detector
 face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_frontalface_default.xml')
 
-
-
-
-# Load the pre-trained MobileNet SSD model
 net = cv2.dnn.readNetFromCaffe(config_path, model_path)
 
 
@@ -186,6 +206,8 @@ class_names = [
     "motorbike", "person", "pottedplant", "sheep", "sofa", "train",
     "tvmonitor"
 ]
+
+
 
 def detect_objects(frame):
     # Get frame dimensions
@@ -210,6 +232,8 @@ def detect_objects(frame):
 
     return detected_objects
 
+
+
 def compute_object_score(video_path):
     cap = cv2.VideoCapture(video_path)
     frame_count = 0
@@ -226,6 +250,7 @@ def compute_object_score(video_path):
 
     cap.release()
     return object_count_sum / frame_count if frame_count > 0 else 0
+
 
 
 def compute_audio_score(video_path):
@@ -247,12 +272,12 @@ def compute_motion_score(video_path):
     cap = cv2.VideoCapture(video_path)
     if not cap.isOpened():
         print("Error: Could not open video.")
-        return 0  # or handle error appropriately
+        return 0  
     
     ret, prev_frame = cap.read()
     if not ret or prev_frame is None:
         print("Failed to read the first frame.")
-        return 0  # or handle error appropriately
+        return 0  
     
     prev_gray = cv2.cvtColor(prev_frame, cv2.COLOR_BGR2GRAY)
     motion_score = 0
@@ -325,35 +350,6 @@ def compute_face_score(video_path):
     return face_score
 
 
-
-def object_detect(frame):
- 
-    # Load the pre-trained MobileNet SSD model and class labels
-    net = cv2.dnn.readNetFromCaffe(config_path,model_path )
-
-    # Prepare the frame for object detection (convert to blob)
-    blob = cv2.dnn.blobFromImage(frame, 0.007843, (300, 300), (127.5, 127.5, 127.5), swapRB=False)
-
-
-    net.setInput(blob)
-    detections = net.forward()
-
-    detected_objects = []
-    confidence = []
-
-    # Loop through detections and collect object labels with confidence > 0.2
-    for i in range(detections.shape[2]):
-        confidence_score = detections[0, 0, i, 2]
-        if confidence_score > 0.2:
-            class_id = int(detections[0, 0, i, 1])
-            detected_objects.append(class_id)
-            confidence.append(confidence_score)
-
-    return detected_objects, confidence
-
-
-
-
 def create_summary_video(scenes_folder, output_folder, top_k=15):
     scene_files = sorted(os.listdir(scenes_folder))
     
@@ -368,7 +364,7 @@ def create_summary_video(scenes_folder, output_folder, top_k=15):
 
     top_scenes = sorted(scene_scores, key=lambda x: x[1], reverse=True)[:top_k]
     def extract_index(filename):
-        return int(filename.split("_")[1].split(".")[0])  # Assumes format like scene_01.mp4
+        return int(filename.split("_")[1].split(".")[0])  
 
     top_scenes_sorted_by_order = sorted(top_scenes, key=lambda x: extract_index(x[0]))
 
@@ -376,6 +372,10 @@ def create_summary_video(scenes_folder, output_folder, top_k=15):
     clips = [VideoFileClip(scene[0]) for scene in top_scenes_sorted_by_order]
     final_clip = concatenate_videoclips(clips)
     final_clip.write_videofile(output_folder, codec="libx264")
+
+
+
+
 
 
 
