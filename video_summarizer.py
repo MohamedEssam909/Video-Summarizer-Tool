@@ -379,31 +379,3 @@ def create_summary_video(scenes_folder, output_folder, top_k=15):
 
 
 
-
-
-def compute_speech_score(video_path):
-    # Extract audio from video using MoviePy
-    audio_path = "temp_audio.wav"
-    video = VideoFileClip(video_path)
-    video.audio.write_audiofile(audio_path)
-
-    # Load the audio file and use SpeechRecognition to detect speech
-    audio = AudioSegment.from_wav(audio_path)
-    recognizer = sr.Recognizer()
-
-    # Try to detect speech in the audio
-    with sr.AudioFile(audio_path) as source:
-        audio_data = recognizer.record(source)
-        try:
-            # Use Google Web Speech API for speech-to-text
-            text = recognizer.recognize_google(audio_data)
-            print(f"Speech Detected: {text[:50]}...")  # Print the first 50 characters of detected speech
-            speech_score = 1  # Indicate that speech was detected
-        except sr.UnknownValueError:
-            print("No speech detected.")
-            speech_score = 0
-
-    os.remove(audio_path)  # Clean up temporary audio file
-    return speech_score
-
-
