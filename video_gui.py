@@ -10,8 +10,7 @@ from PyQt5.QtCore import Qt, QThread, pyqtSignal
 
 
 from video_summarizer import (
-    extract_frames, detect_scene_changes, split_video_by_scenes,
-    create_summary_video
+    extract_frames, detect_scene_changes, split_video_by_scenes, create_summary_video
 )
 
 
@@ -171,7 +170,7 @@ class VideoSummarizerGUI(QWidget):
 
         self.topk_input = QSpinBox()
         self.topk_input.setMinimum(1)
-        self.topk_input.setValue(3)
+        self.topk_input.setValue(5)
         self.topk_layout.addWidget(self.topk_input)
 
         self.progress = QProgressBar()
