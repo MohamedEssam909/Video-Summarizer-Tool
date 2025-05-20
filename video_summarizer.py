@@ -317,7 +317,7 @@ def compute_face_score(video_path):
 
     # Compute a face score
     if total_frames > 0:
-        # You can adjust how you compute the face score, e.g., use the average face area or count
+       
         face_score = (total_faces + (total_area / total_frames)) / total_frames
     else:
         face_score = 0  # No frames processed, no faces detected
